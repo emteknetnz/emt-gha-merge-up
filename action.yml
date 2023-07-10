@@ -1,0 +1,33 @@
+# @todo add step to install php
+
+
+# https://api.github.com/repos/silverstripe/silverstripe-framework/branches
+
+
+GITHUB_REPOSITORY=silverstripe/silverstripe-framework
+
+# -H "Authorization: Bearer ${{ github.token }}" \
+
+# Gets all braches from GitHub API
+# https://docs.github.com/en/rest/branches/branches?apiVersion=2022-11-28#list-branches
+RESP_CODE=$(curl -w %{http_code} -s -o __response.json \
+-X GET "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches?per_page=100" \
+-H "Accept: application/vnd.github+json" \
+-H "X-GitHub-Api-Version: 2022-11-28" \
+)
+if [[ $RESP_CODE != "200" ]]; then
+  echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
+  exit 1
+fi
+
+php versions.php
+
+
+# # Filter on `m` and `m.n` style branches
+# BRANCHES=$(jq -r '.[].name' __response.json | grep -Po '^[0-9]+\.?[0-9]*$' | sort -V -r)
+# for BRANCH in "$BRANCHES"; do
+#   echo "$BRANCH"
+# done
+
+
+
