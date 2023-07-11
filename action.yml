@@ -63,10 +63,57 @@ fi
 
 BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php versions.php)
 echo "BRANCHES is $BRANCHES"
+
+
+# @todo delete the following line
+BRANCHES="4.13 4 5.0 5"
+
+# Check to see if there is anything to merge-up
+# Technically we could skip these API calls and just do the checking using only git, though
+# doing this way not checkout the entire git history of the repo if possible
+FROM_BRANCH=""
+INTO_BRANCH=""
+for BRANCH in $BRANCHES; do
+  FROM_BRANCH=$INTO_BRANCH
+  INTO_BRANCH=$BRANCH
+  if [[ $FROM_BRANCH == "" ]]; then
+    continue
+  fi
+  # https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28#compare-two-commits
+  RESP_CODE=$(curl -w %{http_code} -s -o __compare.json \
+  -X GET "https://github.com/$GITHUB_REPOSITORY/compare/$INTO_BRANCH...$FROM_BRANCH" \
+  -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  )
+  if [[ $RESP_CODE != "200" ]]; then
+    echo "Unable to compare branches - HTTP response code was $RESP_CODE"
+    # @todo uncomment the following line
+    # exit 1
+  fi
+  FILES=$(jq -r .files[].filename __compare.json)
+  # Don't allow merge-ups when there are changes to dependencies
+  if [[ $(echo "$FILES" | grep composer.json) != "" ]] || \
+    [[ $(echo "$FILES" | grep package.json) != "" ]] || \
+    [[ $(echo "$FILES" | grep yarn.lock) != "" ]]
+  then
+    echo "Unable to mergeup between $FROM_BRANCH and $INTO_BRANCH - there are changes to dependencies"
+    # @todo uncomment the following line
+    # exit 1
+  fi
+  # Don't allow merge-ups when there are JS changes that would require a yarn build
+  if [[ $(echo "$FILES" | grep client/) != "" ]]; then
+    echo "Unable to mergeup between $FROM_BRANCH and $INTO_BRANCH - there are changes to JS files"
+    # @todo uncomment the following line
+    # exit 1
+  fi
+done
+
+
 # @todo uncomment the following lines
 # rm __base.json
 # rm __tags.json
 # rm __branches.json
+# rm __compare.json <<<<
 
 FROM_BRANCH=""
 INTO_BRANCH=""
