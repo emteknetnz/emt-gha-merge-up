@@ -1,21 +1,22 @@
 # @todo add step to install php
-
+# @todo when doing actions/checkout ... will probably need to do the `fetch-depth: 0` option
 
 # https://api.github.com/repos/silverstripe/silverstripe-framework/branches
 
 
 GITHUB_REPOSITORY=silverstripe/silverstripe-framework
+GITHUB_BASE_REF=5
 
 # -H "Authorization: Bearer ${{ github.token }}" \
 
-# The minimum cms major with commercial support
+# The minimum cms major with commercial support - configured at a global level
 MINIMUM_CMS_MAJOR=4
 
 # Get the default branch from GitHub API
 # We need to make an API call rather than just assume that the current branch is the default
 # because this workflow may be triggered by workflow_dispatch on any branch
 RESP_CODE=$(curl -w %{http_code} -s -o __base.json \
--X GET "https://api.github.com/repos/${GITHUB_REPOSITORY} \
+-X GET "https://api.github.com/repos/${GITHUB_REPOSITORY}" \
 -H "Accept: application/vnd.github+json" \
 -H "X-GitHub-Api-Version: 2022-11-28" \
 )
@@ -49,16 +50,41 @@ if [[ $RESP_CODE != "200" ]]; then
 fi
 
 DEFAULT_BRANCH=$(jq -r .default_branch __base.json)
+echo "DEFAULT_BRANCH is $DEFAULT_BRANCH"
 
 if [[ $DEFAULT_BRANCH != $GITHUB_BASE_REF ]]; then
   echo "Current branch $GITHUB_BASE_REF is not the same as default branch $DEFAULT_BRANCH"
   exit 1
 fi
 
-MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php versions.php
+BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php versions.php)
+echo "BRANCHES is $BRANCHES"
 
-# # Filter on `m` and `m.n` style branches
-# BRANCHES=$(jq -r '.[].name' __response.json | grep -Po '^[0-9]+\.?[0-9]*$' | sort -V -r)
-# for BRANCH in "$BRANCHES"; do
-#   echo "$BRANCH"
-# done
+FROM_BRANCH=""
+INTO_BRANCH=""
+for BRANCH in $BRANCHES; do
+  FROM_BRANCH=$INTO_BRANCH
+  INTO_BRANCH=$BRANCH
+  if [[ $FROM_BRANCH == "" ]]; then
+    continue
+  fi
+  echo "Attempting to merge-up $FROM_BRANCH into $INTO_BRANCH"
+  # git checkout $FROM_BRANCH
+  # git checkout $INTO_BRANCH
+  # git merge --no-ff --no-commit $FROM_BRANCH
+  DEPENDENCY_FILE=$(git status -s | grep -P '(composer\.json|package\.json|yarn\.lock)' | head -n 1)
+  if [[ $DEPENDENCY_FILE != "" ]]; then
+    echo "Dependency file $DEPENDENCY_FILE found when merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
+    exit 1
+  fi
+  GIT_STATUS=$(git status)
+  if [[ "$GIT_STATUS" =~ 'Changes not staged for commit' ]]; then
+    echo "Merge conflict found when merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
+    exit 1
+  fi
+  # This commit message matches the one created by git when doing a merge-up
+  # That only $FROM_BRANCH is quoted and not $INTO_BRANCH is intentional
+  # git commit -m "Merge branch '$FROM_BRANCH' into $INTO_BRANCH"
+  # git push origin $INTO_BRANCH
+  echo "Succesfully merged-up $FROM_BRANCH into $INTO_BRANCH"
+done

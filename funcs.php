@@ -9,8 +9,6 @@ function versions(
     string $branchesJson = ''
 ) {
     if (!is_numeric($defaultBranch)) {
-        // @todo: confirm these will immediately fail the github actions job
-        // if not, try echo + exit(1)
         throw new Exception('Default branch must be a number');
     }
     if (!ctype_digit($minimumCmsMajor)) {
