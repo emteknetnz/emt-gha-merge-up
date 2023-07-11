@@ -8,9 +8,37 @@ GITHUB_REPOSITORY=silverstripe/silverstripe-framework
 
 # -H "Authorization: Bearer ${{ github.token }}" \
 
-# Gets all braches from GitHub API
+# The minimum cms major with commercial support
+MINIMUM_CMS_MAJOR=4
+
+# Get the default branch from GitHub API
+# We need to make an API call rather than just assume that the current branch is the default
+# because this workflow may be triggered by workflow_dispatch on any branch
+RESP_CODE=$(curl -w %{http_code} -s -o __base.json \
+-X GET "https://api.github.com/repos/${GITHUB_REPOSITORY} \
+-H "Accept: application/vnd.github+json" \
+-H "X-GitHub-Api-Version: 2022-11-28" \
+)
+if [[ $RESP_CODE != "200" ]]; then
+  echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
+  exit 1
+fi
+
+# Gets all tags from GitHub API
+# https://docs.github.com/en/rest/git/tags?apiVersion=2022-11-28
+RESP_CODE=$(curl -w %{http_code} -s -o __tags.json \
+-X GET "https://api.github.com/repos/${GITHUB_REPOSITORY}/tags?per_page=100" \
+-H "Accept: application/vnd.github+json" \
+-H "X-GitHub-Api-Version: 2022-11-28" \
+)
+if [[ $RESP_CODE != "200" ]]; then
+  echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
+  exit 1
+fi
+
+# Gets all branches from GitHub API
 # https://docs.github.com/en/rest/branches/branches?apiVersion=2022-11-28#list-branches
-RESP_CODE=$(curl -w %{http_code} -s -o __response.json \
+RESP_CODE=$(curl -w %{http_code} -s -o __branches.json \
 -X GET "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches?per_page=100" \
 -H "Accept: application/vnd.github+json" \
 -H "X-GitHub-Api-Version: 2022-11-28" \
@@ -19,6 +47,9 @@ if [[ $RESP_CODE != "200" ]]; then
   echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
   exit 1
 fi
+
+DEFAULT_BRANCH=$(jq -r .default_branch __base.json)
+
 
 php versions.php
 
