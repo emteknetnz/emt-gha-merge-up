@@ -1,12 +1,16 @@
 # @todo add step to install php
 # @todo when doing actions/checkout ... will probably need to do the `fetch-depth: 0` option
 
-# https://api.github.com/repos/silverstripe/silverstripe-framework/branches
-
-
 GITHUB_REPOSITORY=silverstripe/silverstripe-framework
 GITHUB_BASE_REF=5
 
+# The 41898282+ email prefixed is the required, matches the ID here
+# https://api.github.com/users/github-actions%5Bbot%5D
+# https://github.community/t/github-actions-bot-email-address/17204/6
+# @todo uncomment the following line
+# git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+# @todo add the following line to all github api requests
 # -H "Authorization: Bearer ${{ github.token }}" \
 
 # The minimum cms major with commercial support - configured at a global level
@@ -69,6 +73,7 @@ for BRANCH in $BRANCHES; do
     continue
   fi
   echo "Attempting to merge-up $FROM_BRANCH into $INTO_BRANCH"
+  # @todo uncomment the following lines
   # git checkout $FROM_BRANCH
   # git checkout $INTO_BRANCH
   # git merge --no-ff --no-commit $FROM_BRANCH
@@ -84,6 +89,7 @@ for BRANCH in $BRANCHES; do
   fi
   # This commit message matches the one created by git when doing a merge-up
   # That only $FROM_BRANCH is quoted and not $INTO_BRANCH is intentional
+  # @todo uncomment the following lines
   # git commit -m "Merge branch '$FROM_BRANCH' into $INTO_BRANCH"
   # git push origin $INTO_BRANCH
   echo "Succesfully merged-up $FROM_BRANCH into $INTO_BRANCH"
