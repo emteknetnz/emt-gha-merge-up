@@ -63,6 +63,10 @@ fi
 
 BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php versions.php)
 echo "BRANCHES is $BRANCHES"
+# @todo uncomment the following lines
+# rm __base.json
+# rm __tags.json
+# rm __branches.json
 
 FROM_BRANCH=""
 INTO_BRANCH=""
