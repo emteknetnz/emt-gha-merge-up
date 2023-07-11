@@ -1,8 +1,5 @@
 <?php
 
-/**
- * 
- */
 function versions(
     string $defaultBranch,
     string $minimumCmsMajor,
@@ -11,7 +8,6 @@ function versions(
     string $tagsJson = '',
     string $branchesJson = ''
 ) {
-    
     if (!is_numeric($defaultBranch)) {
         // @todo: confirm these will immediately fail the github actions job
         // if not, try echo + exit(1)
@@ -20,27 +16,32 @@ function versions(
     if (!ctype_digit($minimumCmsMajor)) {
         throw new Exception('Minimum CMS major must be an integer');
     }
+
+    // work out default major
+    preg_match('#^([0-9]+)+\.?[0-9]*$#', $defaultBranch, $matches);
+    $defaultMajor = $matches[1];
     
-    // read composer.json of the default branch
+    // read composer.json of the current (default) branch
     $contents = $composerJson ?: file_get_contents('composer.json');
     $json = json_decode($contents);
-    $cmsMajor = '';
+    $defaultCmsMajor = '';
     $version = preg_replace('#[^0-9\.]#', '', $json->require->{'silverstripe/framework'} ?? '');
     if (preg_match('#^([0-9]+)+\.?[0-9]*$#', $version, $matches)) {
-        $cmsMajor = $matches[1];
+        $defaultCmsMajor = $matches[1];
     } else {
         $phpVersion = $json->require->{'php'} ?? '';
         if (substr($phpVersion,0, 4) === '^7.4') {
-            $cmsMajor = 4;
+            $defaultCmsMajor = 4;
         } elseif (substr($phpVersion,0, 4) === '^8.1') {
-            $cmsMajor = 5;
+            $defaultCmsMajor = 5;
         }
     }
-    if ($cmsMajor === '') {
-        echo 'Could not work out what CMS major version this module uses';
-        exit(1);
+    if ($defaultCmsMajor === '') {
+        throw new Exception('Could not work out what the default CMS major version this module uses');
     }
-    
+    // work out major diff e.g for silverstripe/admin for CMS 5 => 5 - 2 = 3
+    $majorDiff = $defaultCmsMajor - $defaultMajor;
+
     $minorsWithStableTags = [];
     $contents = $tagsJson ?: file_get_contents('__tags.json');
     foreach (json_decode($contents) as $row) {
@@ -51,7 +52,7 @@ function versions(
         $minor = $matches[1] . '.' . $matches[2];
         $minorsWithStableTags[] = $minor;
     }
-    
+
     $branches = [];
     $contents = $branchesJson ?: file_get_contents('__branches.json');
     foreach (json_decode($contents) as $row) {
@@ -62,16 +63,15 @@ function versions(
         }
         // filter out majors that are too old
         $major = $matches[1];
-        if ($major < $minimumCmsMajor) {
+        if (($major + $majorDiff) < $minimumCmsMajor) {
             continue;
         }
-        // filter out minors that are pre-stable
-        if (preg_match('#^([0-9]+)\.([0-9]+)$#', $tag, $matches)) {
+        // filter out minor branches that are pre-stable
+        if (preg_match('#^([0-9]+)\.([0-9]+)$#', $branch, $matches)) {
             $minor = $matches[1] . '.' . $matches[2];
             if (!in_array($branch, $minorsWithStableTags)) {
                 continue;
             }
-            continue;
         }
         // suffix a .999 minor version to major branches
         if (preg_match('#^[0-9]+$#', $branch)) {

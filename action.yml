@@ -50,15 +50,15 @@ fi
 
 DEFAULT_BRANCH=$(jq -r .default_branch __base.json)
 
+if [[ $DEFAULT_BRANCH != $GITHUB_BASE_REF ]]; then
+  echo "Current branch $GITHUB_BASE_REF is not the same as default branch $DEFAULT_BRANCH"
+  exit 1
+fi
 
-php versions.php
-
+MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php versions.php
 
 # # Filter on `m` and `m.n` style branches
 # BRANCHES=$(jq -r '.[].name' __response.json | grep -Po '^[0-9]+\.?[0-9]*$' | sort -V -r)
 # for BRANCH in "$BRANCHES"; do
 #   echo "$BRANCH"
 # done
-
-
-
