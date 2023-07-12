@@ -8,7 +8,7 @@ Merge-up supported branches in a repository
 ```yml
 steps:
   - name: Merge-up
-    uses: silverstripe/merge-up@v1
+    uses: silverstripe/gha-merge-up@v1
 ```
 
 This action has no inputs

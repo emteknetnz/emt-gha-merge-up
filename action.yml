@@ -15,6 +15,7 @@ runs:
       shell: bash
       env:
         GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_BASE_REF: ${{ github.base_ref }}
       run: |
         # The minimum cms major with commercial support - configured at a global level
         # Change this when major version support changes
