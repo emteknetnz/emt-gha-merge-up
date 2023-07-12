@@ -15,7 +15,7 @@ runs:
       shell: bash
       env:
         GITHUB_REPOSITORY: ${{ github.repository }}
-        GITHUB_BASE_REF: ${{ github.base_ref }}
+        GITHUB_REF_NAME: ${{ github.ref_name }}
       run: |
         # The minimum cms major with commercial support - configured at a global level
         # Change this when major version support changes
@@ -64,8 +64,8 @@ runs:
         DEFAULT_BRANCH=$(jq -r .default_branch __base.json)
         echo "DEFAULT_BRANCH is $DEFAULT_BRANCH"
 
-        if [[ $DEFAULT_BRANCH != $GITHUB_BASE_REF ]]; then
-          echo "Current branch $GITHUB_BASE_REF is not the same as default branch $DEFAULT_BRANCH"
+        if [[ $DEFAULT_BRANCH != $GITHUB_REF_NAME ]]; then
+          echo "Current branch $GITHUB_REF_NAME is not the same as default branch $DEFAULT_BRANCH"
           exit 1
         fi
 
