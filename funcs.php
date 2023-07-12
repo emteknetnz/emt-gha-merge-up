@@ -19,9 +19,12 @@ function branches(
     preg_match('#^([0-9]+)+\.?[0-9]*$#', $defaultBranch, $matches);
     $defaultMajor = $matches[1];
     
-    // read composer.json of the current (default) branch
-    $contents = $composerJson ?: file_get_contents('composer.json');
+    // read __composer.json of the current (default) branch
+    $contents = $composerJson ?: file_get_contents('__composer.json');
     $json = json_decode($contents);
+    if (is_null($json)) {
+        throw new Exception('Could not parse __composer.json');
+    }
     $defaultCmsMajor = '';
     $version = preg_replace('#[^0-9\.]#', '', $json->require->{'silverstripe/framework'} ?? '');
     if (preg_match('#^([0-9]+)+\.?[0-9]*$#', $version, $matches)) {

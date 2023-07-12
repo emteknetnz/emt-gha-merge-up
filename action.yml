@@ -69,8 +69,8 @@ runs:
           exit 1
         fi
 
-        # @todo delete this line
-        # MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php ${{ github.action_path }}/branches.php
+        # Download composer.json for use in branches.php
+        curl -s -o __composer.json https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$DEFAULT_BRANCH/composer.json
 
         BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php ${{ github.action_path }}/branches.php)
         echo "BRANCHES is $BRANCHES"
@@ -131,6 +131,7 @@ runs:
         rm __tags.json
         rm __branches.json
         rm __compare.json
+        rm __composer.json
 
     - name: Checkout code
       uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
