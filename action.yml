@@ -186,6 +186,7 @@ runs:
 
           # Continue if there's nothing to commit
           if [[ "$GIT_STATUS" =~ 'nothing to commit, working tree clean' ]]; then
+            echo "No changes found when merging-up $FROM_BRANCH into $INTO_BRANCH. Skipping."
             continue
           fi
 
