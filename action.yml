@@ -1,5 +1,5 @@
-name: Dispatch CI
-description: GitHub Action to trigger ci.yml workflow_dispatch event via GitHub API
+name: Merge up
+description: GitHub Action to merge-up supported branches in a repository
 
 runs:
   using: composite
@@ -68,7 +68,7 @@ runs:
           exit 1
         fi
 
-        BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php versions.php)
+        BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php branches.php)
         echo "BRANCHES is $BRANCHES"
         echo "branches=$BRANCHES" >> $GITHUB_OUTPUT
 
