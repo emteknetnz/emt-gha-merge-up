@@ -166,6 +166,9 @@ runs:
             echo "Merge conflict found when merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
             exit 1
           fi
+          if [[ "$GIT_STATUS" =~ 'nothing to commit, working tree clean' ]]; then
+            continue
+          fi
           # This commit message matches the one created by git when doing a merge-up
           # That only $FROM_BRANCH is quoted and not $INTO_BRANCH is intentional
           git commit -m "Merge branch '$FROM_BRANCH' into $INTO_BRANCH"
