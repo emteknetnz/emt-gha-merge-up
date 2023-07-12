@@ -161,15 +161,29 @@ runs:
           git checkout $FROM_BRANCH
           git checkout $INTO_BRANCH
           git merge --no-ff --no-commit $FROM_BRANCH
+
+          # Check for merge conflicts - this is just an additional check that is probably
+          # not required as git seems like it does the equivalent of exit 1 when it
+          # detects a merge conflict. Still it doesn't hurt to be extra cautious.
           GIT_STATUS=$(git status)
           if [[ "$GIT_STATUS" =~ 'Changes not staged for commit' ]]; then
             echo "Merge conflict found when merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
             exit 1
           fi
+
+          # Check for any random files that shouldn't be committed
+          if [[ "$GIT_STATUS" =~ 'Untracked files' ]]; then
+            echo "Untracked files found when merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
+            exit 1
+          fi
+
+          # Continue if there's nothing to commit
           if [[ "$GIT_STATUS" =~ 'nothing to commit, working tree clean' ]]; then
             continue
           fi
-          # This commit message matches the one created by git when doing a merge-up
+
+          # Commit and push the merge-up
+          # The commit message matches the one created by git when doing a merge-up
           # That only $FROM_BRANCH is quoted and not $INTO_BRANCH is intentional
           git commit -m "Merge branch '$FROM_BRANCH' into $INTO_BRANCH"
           git push origin $INTO_BRANCH
