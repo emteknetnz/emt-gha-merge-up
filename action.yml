@@ -70,7 +70,7 @@ runs:
         fi
 
         # @todo delete this line
-        MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php ${{ github.action_path }}/branches.php
+        # MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php ${{ github.action_path }}/branches.php
 
         BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php ${{ github.action_path }}/branches.php)
         echo "BRANCHES is $BRANCHES"
