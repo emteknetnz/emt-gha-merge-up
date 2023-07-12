@@ -133,6 +133,8 @@ runs:
           fi
         done
 
+    # actions/checkout with fetch-depth: 0 will fetch ALL git history for the repository
+    # this is required for a merge-up to ensure that nothing is missed
     - name: Checkout code
       uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
       with:
@@ -143,6 +145,7 @@ runs:
       env:
         BRANCHES: ${{ steps.determine.outputs.branches }}
       run: |
+        # Set git user to github-actions bot
         # The 41898282+ email prefixed is the required, matches the ID here
         # https://api.github.com/users/github-actions%5Bbot%5D
         # https://github.community/t/github-actions-bot-email-address/17204/6
@@ -158,8 +161,12 @@ runs:
             continue
           fi
           echo "Attempting to merge-up $FROM_BRANCH into $INTO_BRANCH"
+
+          # Checkout both branches to ensure branch info is up to date
           git checkout $FROM_BRANCH
           git checkout $INTO_BRANCH
+
+          # Perform the merge-up
           git merge --no-ff --no-commit $FROM_BRANCH
 
           # Check for merge conflicts - this is just an additional check that is probably
