@@ -69,6 +69,9 @@ runs:
           exit 1
         fi
 
+        # @todo delete this line
+        MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php branches.php
+
         BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php branches.php)
         echo "BRANCHES is $BRANCHES"
         if [[ $BRANCHES =~ "^FAILURE \- (.+)$" ]]; then
