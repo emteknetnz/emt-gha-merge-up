@@ -63,6 +63,7 @@ runs:
 
         DEFAULT_BRANCH=$(jq -r .default_branch __base.json)
         echo "DEFAULT_BRANCH is $DEFAULT_BRANCH"
+        rm __base.json
 
         if [[ $DEFAULT_BRANCH != $GITHUB_REF_NAME ]]; then
           echo "Current branch $GITHUB_REF_NAME is not the same as default branch $DEFAULT_BRANCH"
@@ -84,6 +85,9 @@ runs:
           exit 0
         fi
         echo "branches=$BRANCHES" >> $GITHUB_OUTPUT
+        rm __tags.json
+        rm __branches.json
+        rm __composer.json
 
         # Check to see if there is anything to merge-up
         # Technically we could skip these API calls and just do the checking using only git, though
@@ -111,6 +115,7 @@ runs:
             exit 1
           fi
           FILES=$(jq -r .files[].filename __compare.json)
+          rm __compare.json
           
           # Don't allow merge-ups when there are changes in dependency files
           DEPENDENCY_FILES="composer.json package.json yarn.lock"
@@ -127,23 +132,6 @@ runs:
             exit 1
           fi
         done
-
-        # Delete temporary files
-        if [[ -f __base.json ]]; then
-          rm __base.json
-        fi
-        if [[ -f __tags.json ]]; then
-          rm __tags.json
-        fi
-        if [[ -f __branches.json ]]; then
-          rm __branches.json
-        fi
-        if [[ -f __compare.json ]]; then
-          rm __compare.json
-        fi
-        if [[ -f __composer.json ]]; then
-          rm __composer.json
-        fi
 
     - name: Checkout code
       uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
