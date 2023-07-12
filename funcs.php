@@ -1,12 +1,12 @@
 <?php
 
-function versions(
+function branches(
     string $defaultBranch,
     string $minimumCmsMajor,
     // The following params are purely for unit testing, for the actual github action it will read json files instead
     string $composerJson = '',
-    string $tagsJson = '',
-    string $branchesJson = ''
+    string $branchesJson = '',
+    string $tagsJson = ''
 ) {
     if (!is_numeric($defaultBranch)) {
         throw new Exception('Default branch must be a number');

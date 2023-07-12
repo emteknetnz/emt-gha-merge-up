@@ -5,21 +5,21 @@ use PHPUnit\Framework\TestCase;
 class VersionsTest extends TestCase
 {
     /**
-     * @dataProvider provideVersions
+     * @dataProvider provideBranches
      */
-    public function testVersions(
+    public function testBranches(
         array $expected,
         string $defaultBranch,
         string $minimumCmsMajor,
         string $composerJson = '',
-        string $tagsJson = '',
-        string $branchesJson = ''
+        string $branchesJson = '',
+        string $tagsJson = ''
     ) {
-        $actual = versions($defaultBranch, $minimumCmsMajor, $composerJson, $tagsJson, $branchesJson);
+        $actual = branches($defaultBranch, $minimumCmsMajor, $composerJson, $branchesJson, $tagsJson);
         $this->assertSame($expected, $actual);
     }
 
-    public function provideVersions()
+    public function provideBranches()
     {
         return [
             'Standard' => [
@@ -32,14 +32,6 @@ class VersionsTest extends TestCase
                         "silverstripe/framework": "^5.0"
                     }
                 }
-                EOT,
-                'tagsJson' => <<<EOT
-                [
-                    {"name": "5.1.0-beta1"},
-                    {"name": "5.0.9"},
-                    {"name": "4.13.11"},
-                    {"name": "3.7.4"}
-                ]
                 EOT,
                 'branchesJson' => <<<EOT
                 [
@@ -54,6 +46,14 @@ class VersionsTest extends TestCase
                     {"name": "5.1"}
                 ]
                 EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "5.1.0-beta1"},
+                    {"name": "5.0.9"},
+                    {"name": "4.13.11"},
+                    {"name": "3.7.4"}
+                ]
+                EOT,
             ],
             'Missing `1` branch and no silverstripe/framework in composer.json' => [
                 'expected' => ['1.13', '2.0', '2'],
@@ -66,13 +66,6 @@ class VersionsTest extends TestCase
                     }
                 }
                 EOT,
-                'tagsJson' => <<<EOT
-                [
-                    {"name": "2.1.0-beta1"},
-                    {"name": "2.0.9"},
-                    {"name": "1.13.11"}
-                ]
-                EOT,
                 'branchesJson' => <<<EOT
                 [
                     {"name": "1.12"},
@@ -80,6 +73,13 @@ class VersionsTest extends TestCase
                     {"name": "2"},
                     {"name": "2.0"},
                     {"name": "2.1"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "2.1.0-beta1"},
+                    {"name": "2.0.9"},
+                    {"name": "1.13.11"}
                 ]
                 EOT,
             ],

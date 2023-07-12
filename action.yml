@@ -1,147 +1,159 @@
-# @todo add step to install php
-# @todo when doing actions/checkout ... will probably need to do the `fetch-depth: 0` option
+name: Dispatch CI
+description: GitHub Action to trigger ci.yml workflow_dispatch event via GitHub API
 
-GITHUB_REPOSITORY=silverstripe/silverstripe-framework
-GITHUB_BASE_REF=5
+runs:
+  using: composite
+  steps:
 
-# The 41898282+ email prefixed is the required, matches the ID here
-# https://api.github.com/users/github-actions%5Bbot%5D
-# https://github.community/t/github-actions-bot-email-address/17204/6
-# @todo uncomment the following line
-# git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+    - name: Install PHP
+      uses: shivammathur/setup-php@1a18b2267f80291a81ca1d33e7c851fe09e7dfc4 # v2.22.0
+      with:
+        php-version: '8.1'
 
-# @todo add the following line to all github api requests
-# -H "Authorization: Bearer ${{ github.token }}" \
+    - name: Determine if should merge-up
+      id: determine
+      shell: bash
+      env:
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        # The minimum cms major with commercial support - configured at a global level
+        # Change this when major version support changes
+        MINIMUM_CMS_MAJOR=4
 
-# The minimum cms major with commercial support - configured at a global level
-MINIMUM_CMS_MAJOR=4
+        # Get the default branch from GitHub API
+        # We need to make an API call rather than just assume that the current branch is the default
+        # because this workflow may be triggered by workflow_dispatch on any branch
+        RESP_CODE=$(curl -w %{http_code} -s -o __base.json \
+        -X GET "https://api.github.com/repos/${GITHUB_REPOSITORY}" \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${{ github.token }}" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        )
+        if [[ $RESP_CODE != "200" ]]; then
+          echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
+          exit 1
+        fi
 
-# Get the default branch from GitHub API
-# We need to make an API call rather than just assume that the current branch is the default
-# because this workflow may be triggered by workflow_dispatch on any branch
-RESP_CODE=$(curl -w %{http_code} -s -o __base.json \
--X GET "https://api.github.com/repos/${GITHUB_REPOSITORY}" \
--H "Accept: application/vnd.github+json" \
--H "X-GitHub-Api-Version: 2022-11-28" \
-)
-if [[ $RESP_CODE != "200" ]]; then
-  echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
-  exit 1
-fi
+        # Gets all tags from GitHub API
+        # https://docs.github.com/en/rest/git/tags?apiVersion=2022-11-28
+        RESP_CODE=$(curl -w %{http_code} -s -o __tags.json \
+        -X GET "https://api.github.com/repos/${GITHUB_REPOSITORY}/tags?per_page=100" \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${{ github.token }}" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        )
+        if [[ $RESP_CODE != "200" ]]; then
+          echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
+          exit 1
+        fi
 
-# Gets all tags from GitHub API
-# https://docs.github.com/en/rest/git/tags?apiVersion=2022-11-28
-RESP_CODE=$(curl -w %{http_code} -s -o __tags.json \
--X GET "https://api.github.com/repos/${GITHUB_REPOSITORY}/tags?per_page=100" \
--H "Accept: application/vnd.github+json" \
--H "X-GitHub-Api-Version: 2022-11-28" \
-)
-if [[ $RESP_CODE != "200" ]]; then
-  echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
-  exit 1
-fi
+        # Gets all branches from GitHub API
+        # https://docs.github.com/en/rest/branches/branches?apiVersion=2022-11-28#list-branches
+        RESP_CODE=$(curl -w %{http_code} -s -o __branches.json \
+        -X GET "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches?per_page=100" \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${{ github.token }}" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        )
+        if [[ $RESP_CODE != "200" ]]; then
+          echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
+          exit 1
+        fi
 
-# Gets all branches from GitHub API
-# https://docs.github.com/en/rest/branches/branches?apiVersion=2022-11-28#list-branches
-RESP_CODE=$(curl -w %{http_code} -s -o __branches.json \
--X GET "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches?per_page=100" \
--H "Accept: application/vnd.github+json" \
--H "X-GitHub-Api-Version: 2022-11-28" \
-)
-if [[ $RESP_CODE != "200" ]]; then
-  echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
-  exit 1
-fi
+        DEFAULT_BRANCH=$(jq -r .default_branch __base.json)
+        echo "DEFAULT_BRANCH is $DEFAULT_BRANCH"
 
-DEFAULT_BRANCH=$(jq -r .default_branch __base.json)
-echo "DEFAULT_BRANCH is $DEFAULT_BRANCH"
+        if [[ $DEFAULT_BRANCH != $GITHUB_BASE_REF ]]; then
+          echo "Current branch $GITHUB_BASE_REF is not the same as default branch $DEFAULT_BRANCH"
+          exit 1
+        fi
 
-if [[ $DEFAULT_BRANCH != $GITHUB_BASE_REF ]]; then
-  echo "Current branch $GITHUB_BASE_REF is not the same as default branch $DEFAULT_BRANCH"
-  exit 1
-fi
+        BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php versions.php)
+        echo "BRANCHES is $BRANCHES"
+        echo "branches=$BRANCHES" >> $GITHUB_OUTPUT
 
-BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php versions.php)
-echo "BRANCHES is $BRANCHES"
+        # Check to see if there is anything to merge-up
+        # Technically we could skip these API calls and just do the checking using only git, though
+        # doing this way not checkout the entire git history of the repo if possible
+        # These API calls are fast so it really doesn't add much overhead
+        # Downside to this is that we will abort early and not merge-up anything when we may have been
+        # able to say merge-up 4.13 -> 4 but not 4 -> 5.0
+        FROM_BRANCH=""
+        INTO_BRANCH=""
+        for BRANCH in $BRANCHES; do
+          FROM_BRANCH=$INTO_BRANCH
+          INTO_BRANCH=$BRANCH
+          if [[ $FROM_BRANCH == "" ]]; then
+            continue
+          fi
+          # https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28#compare-two-commits
+          RESP_CODE=$(curl -w %{http_code} -s -o __compare.json \
+          -X GET "https://api.github.com/repos/$GITHUB_REPOSITORY/compare/$INTO_BRANCH...$FROM_BRANCH" \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer ${{ github.token }}" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          )
+          if [[ $RESP_CODE != "200" ]]; then
+            echo "Unable to compare branches - HTTP response code was $RESP_CODE"
+            exit 1
+          fi
+          FILES=$(jq -r .files[].filename __compare.json)
+          # Don't allow merge-ups when there are changes to dependencies
+          if [[ $(echo "$FILES" | grep composer.json) != "" ]] || \
+            [[ $(echo "$FILES" | grep package.json) != "" ]] || \
+            [[ $(echo "$FILES" | grep yarn.lock) != "" ]]
+          then
+            echo "Unable to mergeup between $FROM_BRANCH and $INTO_BRANCH - there are changes to dependencies"
+            exit 1
+          fi
+          # Don't allow merge-ups when there are JS changes that would require a yarn build
+          if [[ $(echo "$FILES" | grep client/) != "" ]]; then
+            echo "Unable to mergeup between $FROM_BRANCH and $INTO_BRANCH - there are changes to JS files"
+            exit 1
+          fi
+        done
 
+        # Delete temporary files
+        rm __base.json
+        rm __tags.json
+        rm __branches.json
+        rm __compare.json
 
-# @todo delete the following line
-BRANCHES="4.13 4 5.0 5"
+    - name: Checkout code
+      uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      with:
+        fetch-depth: 0
 
-# Check to see if there is anything to merge-up
-# Technically we could skip these API calls and just do the checking using only git, though
-# doing this way not checkout the entire git history of the repo if possible
-FROM_BRANCH=""
-INTO_BRANCH=""
-for BRANCH in $BRANCHES; do
-  FROM_BRANCH=$INTO_BRANCH
-  INTO_BRANCH=$BRANCH
-  if [[ $FROM_BRANCH == "" ]]; then
-    continue
-  fi
-  # https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28#compare-two-commits
-  RESP_CODE=$(curl -w %{http_code} -s -o __compare.json \
-  -X GET "https://github.com/$GITHUB_REPOSITORY/compare/$INTO_BRANCH...$FROM_BRANCH" \
-  -H "Accept: application/vnd.github+json" \
-  -H "X-GitHub-Api-Version: 2022-11-28" \
-  )
-  if [[ $RESP_CODE != "200" ]]; then
-    echo "Unable to compare branches - HTTP response code was $RESP_CODE"
-    # @todo uncomment the following line
-    # exit 1
-  fi
-  FILES=$(jq -r .files[].filename __compare.json)
-  # Don't allow merge-ups when there are changes to dependencies
-  if [[ $(echo "$FILES" | grep composer.json) != "" ]] || \
-    [[ $(echo "$FILES" | grep package.json) != "" ]] || \
-    [[ $(echo "$FILES" | grep yarn.lock) != "" ]]
-  then
-    echo "Unable to mergeup between $FROM_BRANCH and $INTO_BRANCH - there are changes to dependencies"
-    # @todo uncomment the following line
-    # exit 1
-  fi
-  # Don't allow merge-ups when there are JS changes that would require a yarn build
-  if [[ $(echo "$FILES" | grep client/) != "" ]]; then
-    echo "Unable to mergeup between $FROM_BRANCH and $INTO_BRANCH - there are changes to JS files"
-    # @todo uncomment the following line
-    # exit 1
-  fi
-done
+    - name: Git merge-up
+      shell: bash
+      env:
+        BRANCHES: ${{ steps.determine.outputs.branches }}
+      run: |
+        # The 41898282+ email prefixed is the required, matches the ID here
+        # https://api.github.com/users/github-actions%5Bbot%5D
+        # https://github.community/t/github-actions-bot-email-address/17204/6
+        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-
-# @todo uncomment the following lines
-# rm __base.json
-# rm __tags.json
-# rm __branches.json
-# rm __compare.json <<<<
-
-FROM_BRANCH=""
-INTO_BRANCH=""
-for BRANCH in $BRANCHES; do
-  FROM_BRANCH=$INTO_BRANCH
-  INTO_BRANCH=$BRANCH
-  if [[ $FROM_BRANCH == "" ]]; then
-    continue
-  fi
-  echo "Attempting to merge-up $FROM_BRANCH into $INTO_BRANCH"
-  # @todo uncomment the following lines
-  # git checkout $FROM_BRANCH
-  # git checkout $INTO_BRANCH
-  # git merge --no-ff --no-commit $FROM_BRANCH
-  DEPENDENCY_FILE=$(git status -s | grep -P '(composer\.json|package\.json|yarn\.lock)' | head -n 1)
-  if [[ $DEPENDENCY_FILE != "" ]]; then
-    echo "Dependency file $DEPENDENCY_FILE found when merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
-    exit 1
-  fi
-  GIT_STATUS=$(git status)
-  if [[ "$GIT_STATUS" =~ 'Changes not staged for commit' ]]; then
-    echo "Merge conflict found when merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
-    exit 1
-  fi
-  # This commit message matches the one created by git when doing a merge-up
-  # That only $FROM_BRANCH is quoted and not $INTO_BRANCH is intentional
-  # @todo uncomment the following lines
-  # git commit -m "Merge branch '$FROM_BRANCH' into $INTO_BRANCH"
-  # git push origin $INTO_BRANCH
-  echo "Succesfully merged-up $FROM_BRANCH into $INTO_BRANCH"
-done
+        FROM_BRANCH=""
+        INTO_BRANCH=""
+        for BRANCH in $BRANCHES; do
+          FROM_BRANCH=$INTO_BRANCH
+          INTO_BRANCH=$BRANCH
+          if [[ $FROM_BRANCH == "" ]]; then
+            continue
+          fi
+          echo "Attempting to merge-up $FROM_BRANCH into $INTO_BRANCH"
+          git checkout $FROM_BRANCH
+          git checkout $INTO_BRANCH
+          git merge --no-ff --no-commit $FROM_BRANCH
+          GIT_STATUS=$(git status)
+          if [[ "$GIT_STATUS" =~ 'Changes not staged for commit' ]]; then
+            echo "Merge conflict found when merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
+            exit 1
+          fi
+          # This commit message matches the one created by git when doing a merge-up
+          # That only $FROM_BRANCH is quoted and not $INTO_BRANCH is intentional
+          git commit -m "Merge branch '$FROM_BRANCH' into $INTO_BRANCH"
+          git push origin $INTO_BRANCH
+          echo "Succesfully merged-up $FROM_BRANCH into $INTO_BRANCH"
+        done
