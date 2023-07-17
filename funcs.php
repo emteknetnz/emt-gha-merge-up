@@ -23,12 +23,27 @@ function branches(
     $contents = $composerJson ?: file_get_contents('__composer.json');
     $json = json_decode($contents);
     if (is_null($json)) {
-        throw new Exception('Could not parse __composer.json');
+        $lastError = json_last_error();
+        throw new Exception("Could not parse __composer.json - last error was $lastError");
     }
     $defaultCmsMajor = '';
+    $matchedOnBranchThreeLess = false;
     $version = preg_replace('#[^0-9\.]#', '', $json->require->{'silverstripe/framework'} ?? '');
+    if (!$version) {
+        $version = preg_replace('#[^0-9\.]#', '', $json->require->{'silverstripe/cms'} ?? '');
+    }
+    if (!$version) {
+        $version = preg_replace('#[^0-9\.]#', '', $json->require->{'silverstripe/mfa'} ?? '');
+    }
+    if (!$version) {
+        $version = preg_replace('#[^0-9\.]#', '', $json->require->{'silverstripe/assets'} ?? '');
+        $matchedOnBranchThreeLess = true;
+    }
     if (preg_match('#^([0-9]+)+\.?[0-9]*$#', $version, $matches)) {
         $defaultCmsMajor = $matches[1];
+        if ($matchedOnBranchThreeLess) {
+            $defaultCmsMajor += 3;
+        }
     } else {
         $phpVersion = $json->require->{'php'} ?? '';
         if (substr($phpVersion,0, 4) === '^7.4') {
@@ -50,8 +65,9 @@ function branches(
         if (!preg_match('#^([0-9]+)\.([0-9]+)\.([0-9]+)$#', $tag, $matches)) {
             continue;
         }
-        $minor = $matches[1] . '.' . $matches[2];
-        $minorsWithStableTags[] = $minor;
+        $major = $matches[1];
+        $minor = $major. '.' . $matches[2];
+        $minorsWithStableTags[$major][$minor] = true;
     }
 
     $branches = [];
@@ -67,14 +83,7 @@ function branches(
         if (($major + $majorDiff) < $minimumCmsMajor) {
             continue;
         }
-        // filter out minor branches that are pre-stable
-        if (preg_match('#^([0-9]+)\.([0-9]+)$#', $branch, $matches)) {
-            $minor = $matches[1] . '.' . $matches[2];
-            if (!in_array($branch, $minorsWithStableTags)) {
-                continue;
-            }
-        }
-        // suffix a .999 minor version to major branches
+        // suffix a temporary .999 minor version to major branches so that it's sorted correctly later
         if (preg_match('#^[0-9]+$#', $branch)) {
             $branch .= '.999';
         }
@@ -85,25 +94,33 @@ function branches(
     usort($branches, 'version_compare');
     $branches = array_reverse($branches);
     
-    // remove the .999
+    // remove the temporary .999
     array_walk($branches, function(&$branch) {
         $branch = preg_replace('#\.999$#', '', $branch);
     });
     
-    // remove everything except the latest minor from each major line
-    $foundMinorInMajors = [];
+    // remove all branches except:
+    // - the latest major branch in each release line
+    // - the latest minor branch with a stable tag in each release line
+    // - any minor branches without stable tags with a higher minor version than the latest minor with a stable tag
+    $foundMinorInMajor = [];
+    $foundMinorBranchWithStableTag = [];
     foreach ($branches as $i => $branch) {
+        // only remove minor branches, leave major branches in
         if (!preg_match('#^([0-9]+)\.[0-9]+$#', $branch, $matches)) {
             continue;
         }
         $major = $matches[1];
-        if (isset($foundMinorInMajors[$major])) {
+        if (isset($foundMinorBranchWithStableTag[$major]) && isset($foundMinorInMajor[$major])) {
             unset($branches[$i]);
             continue;
         }
-        $foundMinorInMajors[$major] = $branch;
+        if (isset($minorsWithStableTags[$major][$branch])) {
+            $foundMinorBranchWithStableTag[$major] = true;
+        }
+        $foundMinorInMajor[$major] = true;
     }
-    
+
     // reverse the array so that oldest is first
     $branches = array_reverse($branches);
     
