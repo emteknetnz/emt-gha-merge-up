@@ -24,6 +24,7 @@ runs:
         # Get the default branch from GitHub API
         # We need to make an API call rather than just assume that the current branch is the default
         # because this workflow may be triggered by workflow_dispatch on any branch
+        # https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#get-a-repository
         RESP_CODE=$(curl -w %{http_code} -s -o __base.json \
         -X GET "https://api.github.com/repos/$GITHUB_REPOSITORY" \
         -H "Accept: application/vnd.github+json" \
@@ -31,20 +32,16 @@ runs:
         -H "X-GitHub-Api-Version: 2022-11-28" \
         )
         if [[ $RESP_CODE != "200" ]]; then
-          echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
+          echo "Unable to fetch repository meta data - HTTP response code was $RESP_CODE"
           exit 1
         fi
 
-        # Gets all tags from GitHub API
-        # https://docs.github.com/en/rest/git/tags?apiVersion=2022-11-28
-        RESP_CODE=$(curl -w %{http_code} -s -o __tags.json \
-        -X GET "https://api.github.com/repos/$GITHUB_REPOSITORY/tags?per_page=100" \
-        -H "Accept: application/vnd.github+json" \
-        -H "Authorization: Bearer ${{ github.token }}" \
-        -H "X-GitHub-Api-Version: 2022-11-28" \
-        )
-        if [[ $RESP_CODE != "200" ]]; then
-          echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
+        DEFAULT_BRANCH=$(jq -r .default_branch __base.json)
+        echo "DEFAULT_BRANCH is $DEFAULT_BRANCH"
+        rm __base.json
+
+        if [[ $DEFAULT_BRANCH != $GITHUB_REF_NAME ]]; then
+          echo "Current branch $GITHUB_REF_NAME is not the same as default branch $DEFAULT_BRANCH"
           exit 1
         fi
 
@@ -57,16 +54,20 @@ runs:
         -H "X-GitHub-Api-Version: 2022-11-28" \
         )
         if [[ $RESP_CODE != "200" ]]; then
-          echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
+          echo "Unable to read list of branches - HTTP response code was $RESP_CODE"
           exit 1
         fi
 
-        DEFAULT_BRANCH=$(jq -r .default_branch __base.json)
-        echo "DEFAULT_BRANCH is $DEFAULT_BRANCH"
-        rm __base.json
-
-        if [[ $DEFAULT_BRANCH != $GITHUB_REF_NAME ]]; then
-          echo "Current branch $GITHUB_REF_NAME is not the same as default branch $DEFAULT_BRANCH"
+        # Gets 100 most recently created tags from GitHub API
+        # https://docs.github.com/en/rest/git/tags?apiVersion=2022-11-28
+        RESP_CODE=$(curl -w %{http_code} -s -o __tags.json \
+        -X GET "https://api.github.com/repos/$GITHUB_REPOSITORY/tags?per_page=100" \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${{ github.token }}" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        )
+        if [[ $RESP_CODE != "200" ]]; then
+          echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
           exit 1
         fi
 
@@ -89,11 +90,12 @@ runs:
         rm __branches.json
         rm __composer.json
 
-        # Check to see if there is anything to merge-up
-        # Technically we could skip these API calls and just do the checking using only git, though
-        # doing this way not checkout the entire git history of the repo if possible
+        # Check to see if there is anything to merge-up using the GitHub API
+        # Another approach is to see if we should merged using git, however that approach requires us to
+        # first checkout the entire git history for the repo first which can use a lot of data, and there may be
+        # some hidden data rate-limit in GitHub that we don't know about
         # These API calls are fast so it really doesn't add much overhead
-        # Downside to this is that we will abort early and not merge-up anything when we may have been
+        # One downside to the API approach is that we will abort early and not merge-up anything when we may have been
         # able to say merge-up 4.13 -> 4 but not 4 -> 5.0
         FROM_BRANCH=""
         INTO_BRANCH=""
@@ -191,9 +193,8 @@ runs:
           fi
 
           # Commit and push the merge-up
-          # The commit message matches the one created by git when doing a merge-up
-          # That only $FROM_BRANCH is quoted and not $INTO_BRANCH is intentional
-          git commit -m "Merge branch '$FROM_BRANCH' into $INTO_BRANCH"
+          # --no-edit in the context of a merge commit uses the default auto-generated commit message.
+          git commit --no-edit
           git push origin $INTO_BRANCH
           echo "Succesfully merged-up $FROM_BRANCH into $INTO_BRANCH"
         done
